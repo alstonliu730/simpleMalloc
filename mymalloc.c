@@ -4,22 +4,21 @@
 #include <stdio.h> 
 
 // Include any other headers we need here
-
+#include <sys/mman.h>
+#include <unistd.h>
 // NOTE: You should NOT include <stdlib.h> in your final implementation
 
 #include <debug.h> // definition of debug_printf
 
 void *mymalloc(size_t s) {
+  void *p = sbrk(0);
+  void *req = sbrk(s);
 
-  void *p = (void *) malloc(s); // In your solution no calls to malloc should be
-                               // made! Determine how you will request memory :)
-
-  if (!p) {
-    // We are out of memory
-    // if we get NULL back from malloc
+  if (p == MAP_FAILED) {
+    return NULL;
   }
   debug_printf("malloc %zu bytes\n", s);
-
+  assert(p == req);
   return p;
 }
 
