@@ -7,8 +7,8 @@
 #include <unistd.h>
 
 // NOTE: You should NOT include <stdlib.h> in your final implementation
-
 #include <debug.h> // definition of debug_printf
+
 struct header {
   size_t size; // size of free bytes
   header_t *next; // next chunk of free bytes
@@ -16,14 +16,13 @@ struct header {
   int magic; // Dubugging only TODO: Delete after debugging!
 };
 
-// find free space and allocates memory if not enough existing space
+// find free space in free-list
 header_t *find_space(header_t **last, size_t s) {
   header_t *curr = global_base;
-  while (curr != NULL && !(curr->free && curr->size >= s)) {
+  while (curr != NULL && !(curr->free && (curr->size + HEADER_SIZE) >= s)) {
     *last = curr;
     curr = curr->next;
   }
-
   return curr;
 }
 
@@ -32,12 +31,11 @@ header_t *allocate_space(header_t *last, size_t s) {
   header_t *head;
   head = sbrk(0);
   void *req = sbrk(s + HEADER_SIZE);
-  assert((void*) head == req);
-  if (req == MAP_FAILED) {
+  if (req == (void *) -1) {
     // failure to request space
     return NULL;
   }
-
+  debug_printf("Header size: %ld\n", HEADER_SIZE);
   if (last) {
     last->next = head;
   }
@@ -49,8 +47,23 @@ header_t *allocate_space(header_t *last, size_t s) {
 }
 
 // gets the pointer of the meta data of the chunk of memory
-header_t *get_chunk(void *ptr) {
-  return (header_t *) ptr - 1;
+header_t *get_header(void *ptr) {
+  assert(ptr);
+  return (header_t *) ptr - HEADER_SIZE;
+}
+
+// splits the free chunk into a chunk of size s
+header_t *split_chunk(header_t *chunk, size_t s) {
+  assert(chunk != NULL);
+  assert(chunk->size + HEADER_SIZE > s);  // assumes the chunk is big enough for the given size
+  assert(chunk->free == 1); // assumes the chunk is also free
+
+  size_t remaining = chunk->size - (s + HEADER_SIZE);
+
+  header_t *new_chunk = chunk;
+  chunk = chunk + s + HEADER_SIZE; // change the chunk pointer to its new pointer
+  memcpy(new_chunk
+  
 }
 
 // allocates memory in the heap with the given number of bytes and returns the pointer
@@ -60,14 +73,14 @@ void *mymalloc(size_t s) {
   // checks if the size is valid
   if(s <= 0) { return NULL; }
   
-  // first allocation call
+  // first allocation call and initializes the free list
   if (!global_base) {
     // allocates memory of given size
     chunk = allocate_space(NULL, s);
     // returns NULL is OS cannot allocate enough space
     if (!chunk) { return NULL; }
 
-    // offset base to keep track of current block
+    // sets the head of the free chunk to the global base
     global_base = chunk;
   }
   else {
@@ -79,12 +92,12 @@ void *mymalloc(size_t s) {
       if (!chunk) { return NULL; }
     } else {
       chunk->free = 0;
-      chunk->magic = 0x77777777;
+      chunk->magic = 0x77777777; // debug status: used mem
     }
   }
 
-  debug_printf("malloc %zu bytes\n", s);
-  return (chunk + 1);
+ // debug_printf("malloc %zu bytes\n", s);
+  return (chunk + HEADER_SIZE); // returns the actual memory part
 }
 
 void *mycalloc(size_t nmemb, size_t s) {
@@ -92,19 +105,20 @@ void *mycalloc(size_t nmemb, size_t s) {
   void *p = mymalloc(nmemb * s);
   
   if (!p) { return NULL; }
-  debug_printf("calloc %zu bytes\n", s);
-  memset(p, 0, s);
+ // debug_printf("calloc %zu bytes\n", s);
+  memset(p, 0, s); //fills array with 0
   return p;
 }
 
 void myfree(void *ptr) {
-  debug_printf("Freed some memory\n");
   assert(ptr);
   
-  // TODO: merge blocks once splitting blcoks is implemented.
-  header_t *chunk_ptr = get_chunk(ptr);
+  // TODO: merge blocks once splitting blocks is implemented.
+  header_t *chunk_ptr = get_header(ptr);
   assert(chunk_ptr->free == 0);
   assert(chunk_ptr->magic == 0x77777777 || chunk_ptr->magic == 0x12345678);
+
+ // debug_printf("Freed %zu bytes\n", chunk_ptr->size);
   chunk_ptr->free = 1;
   chunk_ptr->magic = 0x55555555;
 }
